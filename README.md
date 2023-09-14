@@ -1,1 +1,1 @@
-# dgu_concepts-of-programming-language
+# dgu_programming-language
