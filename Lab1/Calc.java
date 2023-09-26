@@ -62,47 +62,51 @@ class Calc {
         }
         else error();
     }
-    
+
     Object expr() {
     /* <expr> -> <bexp> {& <bexp> | '|'<bexp>} | !<expr> | true | false */
+        // token의 값에 따라 분류, match()를 실행 후 result에 저장
     	Object result;
     	if (token == '!'){
     		match('!');
     		result = !(boolean) expr();
-    	}
+    	}// token이 !일 때
     	else if (token == 't'){
     		match('t');
     		result = true;
-    	}
+    	} // token이 t일 때
     	else if (token == 'f') {
             match('f');
             result = false;
-        }
+        } // token이 f일 때
     	else {
     		/* <bexp> {& <bexp> | '|'<bexp>} */
     		result = bexp();
+            // token을 2번 입력받음
+            // result와 bexpResult에 bexp()를 실행하여 값을 입력받고, result와 bexpResult를 비교연산하여 result에 저장
     		while (token == '&' || token == '|') {
     			if (token == '&'){
                     match('&');
                     Object bexpResult = bexp();
     				result = (boolean) result && (boolean) bexpResult;
-    			}
+    			} // token이 &일 때
     			else if (token == '|'){
                     match('|');
                     Object bexpResult = bexp();
     				result = (boolean) result || (boolean) bexpResult;
-    			}
+    			} // token이 |일 때
     		}
     	}
-    	return result;
+    	return result;  // result를 반환
 	}
 
     Object bexp( ) {
     /* <bexp> -> <aexp> [<relop> <aexp>] */
         int aexp1 = aexp();
     	Object result = aexp1;
+        // aexp()를 2번 실행하고, token의 값에 따라 비교 연산을 시행
     	if (token == '<' || token == '>' || token == '=' || token == '!'){ // <relop>
-    		String op = relop();
+    		String op = relop();    // relop()을 이용하여 문자열로 변환
             int aexp2 = aexp();
             switch(op){
                 case "<": result = (boolean)(aexp1 < aexp2); break;
@@ -114,14 +118,15 @@ class Calc {
             }
     	}
 		else {
-			result = aexp1;
-		}
+			error();
+		}   // token이 관계 연산자가 아닐 때 error() 실행
     	return result;		
 	}
 
     String relop() {    	
     /* <relop> -> ( < | <= | > | >= | == | != ) */    	
     	String result = "";
+        // 관계 연산자 2개가 같이 쓰일 때가 있으므로 문자열로 변환
     	if (token == '<'){
             match('<');
             if(token == '='){
@@ -157,15 +162,15 @@ class Calc {
                 result = "!=";
             }
             else
-                error();
+                error();    // token이 관계 연산자가 아닐 때 error() 실행
         }
-    	return result;
+    	return result;  // result 반환
 	}
-    
-    // TODO: [Modify code of aexp() for <aexp> -> <term> { + <term> | - <term> }]
+
     int aexp() {
     /* expr -> term { '+' term } */
         int result = term();
+        // +, -의 산술 연산자를 처리, 각 산술 연산자에 맞는 연산 후 result에 저장
         while (token == '+' || token == '-') {
             int currentToken = token;
             if (token == '+') {
@@ -175,14 +180,14 @@ class Calc {
                 match('-');
                 result -= term();
             }
-        }
-        return result;
+        }   // token에 산술 연산자가 들어올 때까지 계속 반복 실행
+        return result;  // result 반환
     }
 
- // TODO: [Modify code of term() for <term> -> <factor> { * <factor> | / <factor>}]
     int term( ) {
     /* term -> factor { '*' factor } */
        int result = factor();
+       // *, /의 산술 연산자를 처리, 각 산술 연산자에 맞는 연산 후 result에 저장
        while (token == '*' || token == '/') {
            int currentToken = token;
            if (token == '*'){
@@ -193,8 +198,8 @@ class Calc {
                match('/');
                result /= factor();
            }
-       }
-       return result;
+       }    // token에 산술 연산자가 들어올 때까지 계속 반복 실행
+       return result;   // result 반환
     }
 
     int factor() {
