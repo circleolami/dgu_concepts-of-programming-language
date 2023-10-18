@@ -1,232 +1,500 @@
-import java.io.*;
+// AST.java
+// AST for S
+import java.util.*;
 
-class Calc {
-    int token; int value; int ch;
-    private PushbackInputStream input;
-    final int NUMBER=256;
-
-    Calc(PushbackInputStream is) {
-        input = is;
+class Indent {
+    public static void display(int level, String s) {
+        String tab = "";
+        System.out.println();
+        for (int i=0; i<level; i++)
+            tab = tab + "  ";
+        System.out.print(tab + s);
     }
+}
 
-    int getToken( )  { /* tokens are characters */
-        while(true) {
-            try  {
-	            ch = input.read();
-                if (ch == ' ' || ch == '\t' || ch == '\r') ;
-                else 
-                    if (Character.isDigit(ch)) {
-                        value = number( );
-	               input.unread(ch);
-		     return NUMBER;
-	          }
-	          else return ch;
-	  } catch (IOException e) {
-                System.err.println(e);
-            }
-        }
+abstract class Command {
+    // Command = Decl | Function | Stmt
+    Type type =Type.UNDEF;
+    public void display(int l) {  }
+}
+
+class Decls extends ArrayList<Decl> {
+    // Decls = Decl*
+
+    Decls() { super(); };
+    Decls(Decl d) {
+        this.add(d);
     }
-
-    private int number( )  {
-    /* number -> digit { digit } */
-        int result = ch - '0';
-        try  {
-            ch = input.read();
-            while (Character.isDigit(ch)) {
-                result = 10 * result + ch -'0';
-                ch = input.read(); 
-            }
-        } catch (IOException e) {
-            System.err.println(e);
-        }
-        return result;
-    }
-
-    void error( ) {
-        System.out.printf("parse error : %d\n", ch);
-        //System.exit(1);
-    }
-
-    void match(int c) { 
-        if (token == c) 
-	    token = getToken();
-        else error();
-    }
-
-    void command( ) {
-    /* command -> expr '\n' */
-        Object result = expr();
-        if (token == '\n') {
-            System.out.printf("The result is: ");
-            System.out.println(result);
-        }
-        else error();
-    }
-
-    Object expr() {
-    /* <expr> -> <bexp> {& <bexp> | '|'<bexp>} | !<expr> | true | false */
-        // token의 값에 따라 분류, match()를 실행 후 result에 저장
-    	Object result;
-    	if (token == '!'){
-    		match('!');
-    		result = !(boolean) expr();
-    	}// token이 !일 때
-    	else if (token == 't'){
-    		match('t');
-    		result = true;
-    	} // token이 t일 때
-    	else if (token == 'f') {
-            match('f');
-            result = false;
-        } // token이 f일 때
-    	else {
-    		/* <bexp> {& <bexp> | '|'<bexp>} */
-    		result = bexp();
-            // token을 2번 입력받음
-            // result와 bexpResult에 bexp()를 실행하여 값을 입력받고, result와 bexpResult를 비교연산하여 result에 저장
-    		while (token == '&' || token == '|') {
-    			if (token == '&'){
-                    match('&');
-                    Object bexpResult = bexp();
-    				result = (boolean) result && (boolean) bexpResult;
-    			} // token이 &일 때
-    			else if (token == '|'){
-                    match('|');
-                    Object bexpResult = bexp();
-    				result = (boolean) result || (boolean) bexpResult;
-    			} // token이 |일 때
-    		}
-    	}
-    	return result;  // result를 반환
-	}
-
-    Object bexp( ) {
-    /* <bexp> -> <aexp> [<relop> <aexp>] */
-        int aexp1 = aexp();
-    	Object result = aexp1;
-        // aexp()를 2번 실행하고, token의 값에 따라 비교 연산을 시행
-    	if (token == '<' || token == '>' || token == '=' || token == '!'){ // <relop>
-    		String op = relop();    // relop()을 이용하여 문자열로 변환
-            int aexp2 = aexp();
-            switch(op){
-                case "<": result = (boolean)(aexp1 < aexp2); break;
-                case "<=": result = (boolean)(aexp1 <= aexp2); break;
-                case ">": result = (boolean)(aexp1 > aexp2); break;
-                case ">=": result = (boolean)(aexp1 >= aexp2); break;
-                case "==": result = (boolean)(aexp1 == aexp2); break;
-                case "!=": result = (boolean)(aexp1 != aexp2); break;
-            }
-    	}
-		else {
-			error();
-		}   // token이 관계 연산자가 아닐 때 error() 실행
-    	return result;		
-	}
-
-    String relop() {    	
-    /* <relop> -> ( < | <= | > | >= | == | != ) */    	
-    	String result = "";
-        // 관계 연산자 2개가 같이 쓰일 때가 있으므로 문자열로 변환
-    	if (token == '<'){
-            match('<');
-            if(token == '='){
-                match('=');
-                result = "<=";
-            }
-            else{
-                result = "<";
-            }
-        }
-        else if (token == '>'){
-            match('>');
-            if(token == '='){
-                match('=');
-                result = ">=";
-            }
-            else
-                result = ">";
-        }
-        else if(token == '='){
-            match('=');
-            if(token == '='){
-                match('=');
-                result = "==";
-            }
-            else
-                error();
-        }
-        else if(token =='!'){
-            match('!');
-            if(token == '='){
-                match('=');
-                result = "!=";
-            }
-            else
-                error();    // token이 관계 연산자가 아닐 때 error() 실행
-        }
-    	return result;  // result 반환
-	}
-
-    int aexp() {
-    /* expr -> term { '+' term } */
-        int result = term();
-        // +, -의 산술 연산자를 처리, 각 산술 연산자에 맞는 연산 후 result에 저장
-        while (token == '+' || token == '-') {
-            int currentToken = token;
-            if (token == '+') {
-                match('+');
-                result += term();
-            } else if (token == '-') {
-                match('-');
-                result -= term();
-            }
-        }   // token에 산술 연산자가 들어올 때까지 계속 반복 실행
-        return result;  // result 반환
-    }
-
-    int term( ) {
-    /* term -> factor { '*' factor } */
-       int result = factor();
-       // *, /의 산술 연산자를 처리, 각 산술 연산자에 맞는 연산 후 result에 저장
-       while (token == '*' || token == '/') {
-           int currentToken = token;
-           if (token == '*'){
-               match('*');
-               result *= factor();
-           }
-           else if(token == '/') {
-               match('/');
-               result /= factor();
-           }
-       }    // token에 산술 연산자가 들어올 때까지 계속 반복 실행
-       return result;   // result 반환
-    }
-
-    int factor() {
-    /* factor -> '(' expr ')' | number */
-        int result = 0;
-        if (token == '(') {
-            match('(');
-            result = aexp();
-            match(')');
-        }
-        else if (token == NUMBER) {
-            result = value;
-	        match(NUMBER); //token = getToken();
-        }
-        return result;
-    }
-
-    void parse( ) {
-        token = getToken(); // get the first token
-        command();          // call the parsing command
-    }
-
-    public static void main(String args[]) { 
-        Calc calc = new Calc(new PushbackInputStream(System.in));
-        while(true) {
-            System.out.print(">> ");
-            calc.parse();
+    // TODO: [Insert the code of display()]
+    // 이 메서드는 주어진 레벨에 따라 들여쓰기와 함께 선언 리스트를 표시합니다.
+    public void display(int level){
+        Indent.display(level, "Declarations: ");
+        for (Decl d : this) {
+            d.display(level + 1);
         }
     }
 }
+
+class Decl extends Command {
+    // Decl = Type type; Identifier id
+    Identifier id;
+    Expr expr = null;
+    int arraysize = 0;
+
+    Decl (String s, Type t) {
+        id = new Identifier(s); type = t;
+    } // declaration
+
+    Decl (String s, Type t, int n) {
+        id = new Identifier(s); type = t; arraysize = n;
+    } // array declaration
+
+    Decl (String s, Type t, Expr e) {
+        id = new Identifier(s); type = t; expr = e;
+    } // declaration
+
+    // TODO: [Insert the code of display()]
+    // 이 메서드는 주어진 레벨에 따라 들여쓰기와 함께 선언의 타입과 식별자를 표시합니다.
+    public void display(int level) {
+        Indent.display(level, "Declaration: " + id + ", Type: " + type);
+        if (expr != null) {
+            expr.display(level + 1);
+        }
+    }
+}
+
+class Functions extends ArrayList<Function> {
+    // Functions = Function*
+}
+
+class Function extends Command  {
+    // Function = Type type; Identifier id; Decls params; Stmt stmt
+    Identifier id;
+    Decls params;
+    Stmt stmt;
+
+    Function(String s, Type t) {
+        id = new Identifier(s); type = t; params = null; stmt = null;
+    }
+
+    public String toString ( ) {
+        return id.toString()+params.toString();
+    }
+}
+
+class Type {
+    // Type = int | bool | string | fun | array | except | void
+    final static Type INT = new Type("int");
+    final static Type BOOL = new Type("bool");
+    final static Type STRING = new Type("string");
+    final static Type VOID = new Type("void");
+    final static Type FUN = new Type("fun");
+    final static Type ARRAY = new Type("array");
+    final static Type EXC = new Type("exc");
+    final static Type RAISEDEXC = new Type("raisedexc");
+    final static Type UNDEF = new Type("undef");
+    final static Type ERROR = new Type("error");
+
+    protected String id;
+    protected Type(String s) { id = s; }
+    public String toString ( ) { return id; }
+    // TODO: [Insert the code of display()]
+    // 이 메서드는 주어진 레벨에 따라 들여쓰기와 함께 타입을 표시합니다.
+    public void display(int level) {
+        Indent.display(level, "Type: " + id);
+    }
+}
+
+class ProtoType extends Type {
+    // defines the type of a function and its parameters
+    Type result;
+    Decls params;
+    ProtoType (Type t, Decls ds) {
+        super(t.id);
+        result = t;
+        params = ds;
+    }
+}
+
+abstract class Stmt extends Command {
+    // Stmt = Empty | Stmts | Assignment | If  | While | Let | Read | Print
+}
+
+class Empty extends Stmt {
+    public void display (int level) {
+        Indent.display(level, "Empty");
+    }
+}
+
+class Stmts extends Stmt {
+    // Stmts = Stmt*
+    public ArrayList<Stmt> stmts = new ArrayList<Stmt>();
+
+    Stmts() {
+        super();
+    }
+
+    Stmts(Stmt s) {
+        stmts.add(s);
+    }
+    // TODO: [Insert the code of display()]
+// 이 메서드는 주어진 레벨에 따라 들여쓰기와 함께 여러 문장을 표시합니다.
+    public void display(int level) {
+        Indent.display(level, "Statements: ");
+        for (Stmt s : stmts) {
+            s.display(level + 1);
+        }
+    }
+}
+
+class Assignment extends Stmt {
+    // Assignment = Identifier id; Expr expr
+    Identifier id;
+    Array ar = null;
+    Expr expr;
+
+    Assignment (Identifier t, Expr e) {
+        id = t;
+        expr = e;
+    }
+
+    Assignment (Array a, Expr e) {
+        ar = a;
+        expr = e;
+    }
+
+    // TODO: [Insert the code of display()]
+    // 이 메서드는 주어진 레벨에 따라 들여쓰기와 함께 할당 문장을 표시합니다.
+    public void display(int level) {
+        Indent.display(level, "Assignment: ");
+        if (id != null) {
+            id.display(level + 1);
+        }
+        if (ar != null) {
+            ar.display(level + 1);
+        }
+        expr.display(level + 1);
+    }
+}
+
+class If extends Stmt {
+    // If = Expr expr; Stmt stmt1, stmt2;
+    Expr expr;
+    Stmt stmt1, stmt2;
+
+    If (Expr t, Stmt tp) {
+        expr = t; stmt1 = tp; stmt2 = new Empty( );
+    }
+
+    If (Expr t, Stmt tp, Stmt ep) {
+        expr = t; stmt1 = tp; stmt2 = ep;
+    }
+
+    // TODO: [Insert the code of display()]
+    // 이 메서드는 주어진 레벨에 따라 들여쓰기와 함께 if-else 문을 표시합니다.
+    public void display(int level) {
+        Indent.display(level, "If: ");
+        expr.display(level + 1);
+        Indent.display(level, "Elif: ");
+        stmt1.display(level + 1);
+        Indent.display(level, "Else: ");
+        stmt2.display(level + 1);
+    }
+}
+
+class While extends Stmt {
+    // While = Expr expr; Stmt stmt;
+    Expr expr;
+    Stmt stmt;
+
+    While (Expr t, Stmt b) {
+        expr = t; stmt = b;
+    }
+
+    // TODO: [Insert the code of display()]
+    // 이 메서드는 주어진 레벨에 따라 들여쓰기와 함께 while 문을 표시합니다.
+    public void display(int level) {
+        Indent.display(level, "While: ");
+        expr.display(level + 1);
+        stmt.display(level + 1);
+    }
+}
+
+class Let extends Stmt {
+    // Let = Decls decls; Functions funs; Stmts stmts; // <- Disregard [Functions funs]
+    Decls decls;
+    Functions funs;
+    Stmts stmts;
+
+    Let(Decls ds, Stmts ss) {
+        decls = ds;
+        funs = null;
+        stmts = ss;
+    }
+
+    Let(Decls ds, Functions fs, Stmts ss) {
+        decls = ds;
+        funs = fs;
+        stmts = ss;
+    }
+
+    // TODO: [Insert the code of display()]
+    // 이 메서드는 주어진 레벨에 따라 들여쓰기와 함께 let 문을 표시합니다.
+    public void display(int level) {
+        Indent.display(level, "Let: ");
+        decls.display(level + 1);
+        stmts.display(level + 1);
+    }
+}
+
+class Read extends Stmt {
+    // Read = Identifier id
+    Identifier id;
+
+    Read (Identifier v) {
+        id = v;
+    }
+
+    // TODO: [Insert the code of display()]
+    // 이 메서드는 주어진 레벨에 따라 들여쓰기와 함께 read 문을 표시합니다.
+    public void display(int level) {
+        public void display(int level) {
+            Indent.display(level, "Read: ");
+            id.display(level + 1);
+        }
+    }
+
+    class Print extends Stmt {
+        // Print =  Expr expr
+        Expr expr;
+
+        Print (Expr e) {
+            expr = e;
+        }
+        // TODO: [Insert the code of display()]
+        // 이 메서드는 주어진 레벨에 따라 들여쓰기와 함께 print 문을 표시합니다.
+        public void display(int level) {
+            Indent.display(level, "Print: ");
+            expr.display(level + 1);
+        }
+
+    }
+
+    class Return extends Stmt {
+        Identifier fid;
+        Expr expr;
+
+        Return (String s, Expr e) {
+            fid = new Identifier(s);
+            expr = e;
+        }
+    }
+
+    class Try extends Stmt {
+        // Try = Identifier id; Stmt stmt1; Stmt stmt2;
+        Identifier eid;
+        Stmt stmt1;
+        Stmt stmt2;
+
+        Try(Identifier id, Stmt s1, Stmt s2) {
+            eid = id;
+            stmt1 = s1;
+            stmt2 = s2;
+        }
+    }
+
+    class Raise extends Stmt {
+        Identifier eid;
+
+        Raise(Identifier id) {
+            eid = id;
+        }
+    }
+
+    class Exprs extends ArrayList<Expr> {
+        // Exprs = Expr*
+    }
+
+    abstract class Expr extends Stmt {
+        // Expr = Identifier | Value | Binary | Unary | Call
+
+    }
+
+    class Call extends Expr {
+        Identifier fid;
+        Exprs args;
+
+        Call(Identifier id, Exprs a) {
+            fid = id;
+            args = a;
+        }
+    }
+
+    class Identifier extends Expr {
+        // Identifier = String id
+        private String id;
+
+        Identifier(String s) { id = s; }
+
+        public String toString( ) { return id; }
+
+        public boolean equals (Object obj) {
+            String s = ((Identifier) obj).id;
+            return id.equals(s);
+        }
+
+        // TODO: [Insert the code of display()]
+        // 이 메서드는 주어진 레벨에 따라 들여쓰기와 함께 식별자를 표시합니다.
+        public void display(int level) {
+            Indent.display(level, "Identifier: " + toString());
+        }
+    }
+
+    class Array extends Expr {
+        // Array = Identifier id; Expr expr
+        Identifier id;
+        Expr expr = null;
+
+        Array(Identifier s, Expr e) {id = s; expr = e;}
+
+        public String toString( ) { return id.toString(); }
+
+        public boolean equals (Object obj) {
+            String s = ((Array) obj).id.toString();
+            return id.equals(s);
+        }
+    }
+
+    class Value extends Expr {
+        // Value = int | bool | string | array | function
+        protected boolean undef = true;
+        Object value = null; // Type type;
+
+        Value(Type t) {
+            type = t;
+            if (type == Type.INT) value = new Integer(0);
+            if (type == Type.BOOL) value = new Boolean(false);
+            if (type == Type.STRING) value = "";
+            undef = false;
+        }
+
+        Value(Object v) {
+            if (v instanceof Integer) type = Type.INT;
+            if (v instanceof Boolean) type = Type.BOOL;
+            if (v instanceof String) type = Type.STRING;
+            if (v instanceof Function) type = Type.FUN;
+            if (v instanceof Value[]) type = Type.ARRAY;
+            value = v; undef = false;
+        }
+
+        Object value() { return value; }
+
+        int intValue( ) {
+            if (value instanceof Integer)
+                return ((Integer) value).intValue();
+            else return 0;
+        }
+
+        boolean boolValue( ) {
+            if (value instanceof Boolean)
+                return ((Boolean) value).booleanValue();
+            else return false;
+        }
+
+        String stringValue ( ) {
+            if (value instanceof String)
+                return (String) value;
+            else return "";
+        }
+
+        Function funValue ( ) {
+            if (value instanceof Function)
+                return (Function) value;
+            else return null;
+        }
+
+        Value[] arrValue ( ) {
+            if (value instanceof Value[])
+                return (Value[]) value;
+            else return null;
+        }
+
+        Type type ( ) { return type; }
+
+        public String toString( ) {
+            //if (undef) return "undef";
+            if (type == Type.INT) return "" + intValue();
+            if (type == Type.BOOL) return "" + boolValue();
+            if (type == Type.STRING) return "" + stringValue();
+            if (type == Type.FUN) return "" + funValue();
+            if (type == Type.ARRAY) return "" + arrValue();
+            return "undef";
+        }
+
+        // TODO: [Insert the code of display()]
+        // 이 메서드는 주어진 레벨에 따라 들여쓰기와 함께 값을 표시합니다.
+        public void display(int level) {
+            Indent.display(level, "Value: " + toString());
+        }
+    }
+
+    class Binary extends Expr {
+        // Binary = Operator op; Expr expr1; Expr expr2;
+        Operator op;
+        Expr expr1, expr2;
+
+        Binary (Operator o, Expr e1, Expr e2) {
+            op = o; expr1 = e1; expr2 = e2;
+        } // binary
+
+        // TODO: [Insert the code of display()]
+        // 이 메서드는 주어진 레벨에 따라 들여쓰기와 함께 이진 연산을 표시합니다.
+        public void display(int level) {
+            Indent.display(level, "Binary : ");
+            op.display(level + 1);
+            expr1.display(level + 1);
+            expr2.display(level + 1);
+        }
+    }
+
+    class Unary extends Expr {
+        // Unary = Operator op; Expr expr
+        Operator op;
+        Expr expr;
+
+        Unary (Operator o, Expr e) {
+            op = o; //(o.val == "-") ? new Operator("neg"): o;
+            expr = e;
+        } // unary
+
+        // TODO: [Insert the code of display()]
+        // 이 메서드는 주어진 레벨에 따라 들여쓰기와 함께 단항 연산을 표시합니다.
+        public void display(int level) {
+            Indent.display(level, "Unary : ");
+            op.display(level + 1);
+            expr.display(level + 1);
+        }
+
+    }
+
+    class Operator {
+        String val;
+
+        Operator (String s) {
+            val = s;
+        }
+
+        public String toString( ) {
+            return val;
+        }
+
+        public boolean equals(Object obj) {
+            return val.equals(obj);
+        }
+
+        // TODO: [Insert the code of display()]
+        // 이 메서드는 주어진 레벨에 따라 들여쓰기와 함께 연산자를 표시합니다.
+        public void display(int level) {
+            Indent.display(level, "Operator: " + toString());
+        }
+    }
